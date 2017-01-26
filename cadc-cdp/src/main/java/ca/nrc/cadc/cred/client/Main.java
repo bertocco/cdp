@@ -91,6 +91,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.URISyntaxException;
 import java.security.Principal;
 import java.util.HashSet;
 import java.util.Set;
@@ -109,6 +110,7 @@ public class Main implements PrivilegedAction<Boolean>
     public static final String ARG_VIEW_CMD = "view";
     public static final String ARG_DELEGATE_CMD = "delegate";
     public static final String ARG_VALID_DAYS = "daysValid";
+    public static final String ARG_RESOUIRCE_ID = "resourceID";
     
     public static final String ARG_GET_PROXY = "get";
     public static final String ARG_USERID = "userid";
@@ -141,16 +143,6 @@ public class Main implements PrivilegedAction<Boolean>
     };
     
     private Operation operation; // current operation on Cred client
-
-    //public static final String SERVICE_ID = "ivo://cadc.nrc.ca/cred";
-    public static String SERVICE_ID;
-
-    public Main() {
-        LocalAuthority localAuthority = new LocalAuthority();       
-        URI serviceURI = localAuthority.getServiceURI(Standards.CRED_DELEGATE_10.toString());
-        SERVICE_ID = serviceURI.toString();
-        
-    }
 
     /**
      * Main class for accessing CDP
@@ -243,7 +235,7 @@ public class Main implements PrivilegedAction<Boolean>
     {
         try
         {
-            client.delegate(null, daysValid);
+            client.delegate(daysValid);
             msg("Certificate updated");
         }
         catch (Exception e)
@@ -398,29 +390,37 @@ public class Main implements PrivilegedAction<Boolean>
         }
         catch (Exception ex)
         {
-            logger.error("failed to initialise SSL from certificates: "
-                    + ex.getMessage());
-            if (logger.getLevel() == Level.DEBUG)
-            {
-                ex.printStackTrace();
-            }
+            logger.error("failed to initialise SSL from certificates: " + ex.getMessage());
+            logger.debug("failed to initialise SSL from certificates: ", ex);
             if (ex instanceof IllegalArgumentException)
             {
                 usage();
             }
             System.exit(INIT_STATUS);
         }
-
+        
+        String rid = argMap.getValue(ARG_RESOUIRCE_ID);
+        if (rid == null)
+        {
+            usage();
+            logger.error("missing required --resourceID");
+            System.exit(INIT_STATUS);
+        }
         try
         {
-            URI serviceURI = new URI(SERVICE_ID);
-            this.client = new CredClient(serviceURI);
-            logger.info("created: " + client.getClass().getSimpleName() + " for " + serviceURI);
+            URI resourceID = new URI(rid);
+            this.client = new CredClient(resourceID);
+            logger.info("created: " + client.getClass().getSimpleName() + " for " + resourceID);
+        }
+        catch(URISyntaxException ex)
+        {
+            logger.error("malformed resourceID: " + rid);
+            System.exit(INIT_STATUS);
         }
         catch (Exception e)
         {
-            logger.error("failed to find service URL for " + SERVICE_ID);
             logger.error("reason: " + e.getMessage());
+            logger.debug("reason", e);
             System.exit(INIT_STATUS);
         }
     }
@@ -431,10 +431,12 @@ public class Main implements PrivilegedAction<Boolean>
     public static void usage()
     {
         String[] um = {
-                "Usage: java -jar cadcCDP.jar [-v|--verbose|-d|--debug] <op> ...",
+                "Usage: cadc-cdp [-v|--verbose|-d|--debug] --resourceID=<CDP service to use> <op> ...",
                 CertCmdArgUtil.getCertArgUsage(),
                 "",
-                "Help: java -jar cadcCDP.jar <-h | --help>",
+                "Help: cadc-cdp <-h|--help>",
+                "",
+                "  --resourceID specifies the CDP service to use (e.g. ivo://cadc.nrc.ca/cred)",
                 "",
                 "  <op> is one of:    ",
                 "  --delegate [--daysValid=<days>]",
@@ -443,7 +445,7 @@ public class Main implements PrivilegedAction<Boolean>
                 "  --get --userdn=<user distinguished name> [--out=<file>] [--daysValid=<days>] ",
                 "          get a new (shorter) proxy certificate from the server;",
                 "  --view",
-                "          view the currently deleagted proxy certificate",
+                "          view the currently delegated proxy certificate",
         };
 
         for (String line : um)
