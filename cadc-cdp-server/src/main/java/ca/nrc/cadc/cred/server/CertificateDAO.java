@@ -115,16 +115,45 @@ public class CertificateDAO
     public static class CertificateSchema
     {
         private final String dataSourceName;
-        private final String table = "x509_certificates";
+        public static String DEFAULT_CERT_TABLE = "x509_certificates";
 
         private final String certTable;
         
-        //public CertificateSchema(String dataSourceName, String catalog, String schema)
-        public CertificateSchema(String dataSourceName, String catalog)
+        /**
+         * Backwards compatible constructor with default table name.
+         * 
+         * @param dataSourceName
+         * @param catalog
+         * @param schema 
+         */
+        public CertificateSchema(String dataSourceName, String catalog, String schema)
+        {
+            this(dataSourceName, catalog, schema, DEFAULT_CERT_TABLE);
+        }
+        /**
+         * Constructor for certificate table description. The catalog and schema are optional
+         * (null values are allowed). 
+         * 
+         * @param dataSourceName JNDI DataSource name
+         * @param catalog optional catalog (database) name
+         * @param schema optional schema name
+         * @param table certificate table name (required)
+         */
+        public CertificateSchema(String dataSourceName, String catalog, String schema, String table)
         {
             this.dataSourceName = dataSourceName;
-            //this.certTable = catalog + "." + schema + "." + table;
-            this.certTable = catalog + "." + table;
+            if (table == null)
+                throw new IllegalArgumentException("table name cannot be null");
+            
+            StringBuilder sb = new StringBuilder();
+            if (catalog != null)
+                sb.append(catalog).append(".");
+            if (schema != null)
+                sb.append(schema);
+            if (sb.length() > 0)
+                sb.append("."); // yeah: double dot if catalog!= null and schema==null
+            sb.append(table);
+            this.certTable = sb.toString();
         }
         
         public String getTable()
@@ -194,10 +223,9 @@ public class CertificateDAO
 
     public X509CertificateChain get(X500Principal principal)
     {
-        if (principal == null) return null;
-        String canonizedDn = AuthenticationUtil.canonizeDistinguishedName(principal.getName());
-        X500Principal p = new X500Principal(canonizedDn);
-        String hashKey = Integer.toString(p.hashCode());
+        if (principal == null) 
+            return null;
+        String hashKey = X509CertificateChain.genHashKey(principal);
         return get(hashKey);
     }
 
